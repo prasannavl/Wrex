@@ -40,7 +40,7 @@ namespace Wrex
                     Console.ResetColor();
                 }
             };
-
+            
             options.Process(args, async () => await RunWrexAsync(wrex));
         }
 
@@ -75,7 +75,6 @@ namespace Wrex
 
                 var analyzer = new WrexAnalyzer(wrex);
                 consolePrinter.PrintSummary(analyzer.GetSummary());
-
             }
             catch (Exception ex)
             {
