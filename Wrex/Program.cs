@@ -14,26 +14,34 @@ namespace Wrex
 
     using CommandLine.Text;
 
+    using Nito.AsyncEx;
+
     internal class Program
     {
         private static WrexOptions options;
         private static void Main(string[] args)
         {
+            AsyncContext.Run(() => MainAsync(args));
+        }
+
+        private static void MainAsync(string[] args)
+        {
             Console.TreatControlCAsInput = false;
             options = new WrexOptions();
             var wrex = new Wrex(options);
             Console.CancelKeyPress += (sender, eventArgs) =>
+            {
+                lock (Console.Out)
                 {
-                    lock (Console.Out)
-                    {
-                        Console.WriteLine();
-                        Console.WriteLine();
-                        Console.WriteLine("Canceled.");
-                        Console.WriteLine();
-                        Console.ResetColor();
-                    }
-                };
-            options.Process(args, () => Task.Run(async () => await RunWrexAsync(wrex)).Wait());
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine("Canceled.");
+                    Console.WriteLine();
+                    Console.ResetColor();
+                }
+            };
+
+            options.Process(args, async () => await RunWrexAsync(wrex));
         }
 
         private static async Task RunWrexAsync(Wrex wrex = null)
@@ -59,8 +67,7 @@ namespace Wrex
                 var consolePrinter = new ConsolePrinter();
 
                 var cancelSource = new CancellationTokenSource();
-                var progressDisplayTask =
-                    Task.Run(async () => await consolePrinter.ShowProgress(wrex, cancelSource.Token));
+                var progressDisplayTask = consolePrinter.ShowProgress(wrex, cancelSource.Token);
                 await wrex.RunAsync(null, consolePrinter.HandleError);
 
                 cancelSource.Cancel();
@@ -74,6 +81,8 @@ namespace Wrex
             {
                 lock (Console.Out)
                 {
+                    Console.WriteLine();
+                    Console.WriteLine();
                     Console.WriteLine(ex.Message);                    
                 }
             }

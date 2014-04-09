@@ -62,7 +62,7 @@ namespace Wrex
             ExecutedRequests = 0;
             results = new List<ResultValue>(Options.NumberOfRequests);
 
-            await ProcessAsync(onProgress, onError);
+            await ProcessAsync(onProgress, onError).ConfigureAwait(false);
         }
 
         public async Task ProcessAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
@@ -74,7 +74,7 @@ namespace Wrex
 
             if (Options.MultiThreaded)
             {
-                action = x => Task.Run(async () => await ProcessTaskAsync(x, onProgress, onError));
+                action = x => Task.Run(async () => await ProcessTaskAsync(x, onProgress, onError).ConfigureAwait(false));
             }
             else
             {
@@ -98,7 +98,7 @@ namespace Wrex
                     tasks.Add(action(i));
                     i++;
                 }
-                await Task.WhenAll(tasks);
+                await Task.WhenAll(tasks).ConfigureAwait(false);
             }
             sw.Stop();
             TotalTimeTaken = sw.Elapsed;
@@ -121,7 +121,7 @@ namespace Wrex
             try
             {
                 sw.Start();
-                response = (HttpWebResponse)await webRequest.GetResponseAsync();
+                response = (HttpWebResponse)await webRequest.GetResponseAsync().ConfigureAwait(false);
                 sw.Stop();
                 result.StatusCode = response.StatusCode;
             }

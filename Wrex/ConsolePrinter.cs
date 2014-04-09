@@ -64,7 +64,7 @@ namespace Wrex
                 Console.Write(new string(' ', properties.MaxLength - currentIndicatorLength));
                 Console.Write("]");
                 Console.Write(" ");
-                var progress = (progressFraction * 100).ToString("####.##").PadLeft(5, ' ');
+                var progress = (progressFraction * 100).ToString("###0.##").PadLeft(5, ' ');
                 Console.Write("{0}", progress);
                 Console.Write(" %");
                 Console.Write("\r");
