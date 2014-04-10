@@ -74,7 +74,11 @@ namespace Wrex
                 await progressDisplayTask;
 
                 var analyzer = new WrexAnalyzer(wrex);
-                consolePrinter.PrintSummary(analyzer.GetSummary());
+                var summary = analyzer.GetSummary();
+                consolePrinter.PrintSummary(summary);
+                consolePrinter.PrintStatusDistribution(analyzer.GetStatusDistribution());
+                consolePrinter.PrintResponseTimeHistogram(analyzer.GetReponseTimeDistribution(summary), wrex);
+                Console.WriteLine();
             }
             catch (Exception ex)
             {

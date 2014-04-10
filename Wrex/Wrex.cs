@@ -8,6 +8,7 @@
 namespace Wrex
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Net;
@@ -17,7 +18,7 @@ namespace Wrex
     public class Wrex
     {
         public const string DefaultContentType = "text/plain";
-        private List<ResultValue> results;
+        private ConcurrentBag<ResultValue> results;
         public bool VerifyResponseMatch;
         private int executedRequests;
 
@@ -60,7 +61,7 @@ namespace Wrex
             }
 
             ExecutedRequests = 0;
-            results = new List<ResultValue>(Options.NumberOfRequests);
+            results = new ConcurrentBag<ResultValue>();
 
             await ProcessAsync(onProgress, onError).ConfigureAwait(false);
         }
