@@ -12,7 +12,7 @@ namespace Wrex
     using System.Linq;
     using System.Net;
 
-    internal class WrexAnalyzer
+    public class WrexAnalyzer
     {
         private readonly Wrex wrex;
 

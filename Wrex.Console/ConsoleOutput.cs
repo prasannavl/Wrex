@@ -1,25 +1,28 @@
 ﻿// Author: Prasanna V. Loganathar
-// Project: Wrex
+// Project: Wrex.Console
 // Copyright (c) Launchark. All rights reserved.
 // See License.txt in the project root for license information.
 //  
-// Created: 4:24 PM 08-04-2014
+// Created: 8:50 PM 10-04-2014
 
-namespace Wrex
+namespace Wrex.Console
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.Specialized;
     using System.Linq;
+    using System.Net;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
 
     using ConsoleUtils;
 
-    internal class ConsolePrinter
+    internal class ConsoleOutput
     {
         private readonly DisplayProperties properties;
 
-        public ConsolePrinter()
+        public ConsoleOutput()
         {
             properties = new DisplayProperties();
         }
@@ -78,30 +81,86 @@ namespace Wrex
             const string ErrorString = "Error: ";
             lock (Console.Out)
             {
+                Console.WriteLine();
+                Console.WriteLine();
                 ExtendedConsole.WriteErrorLine(ErrorString + ex.Message);
                 if (ex.InnerException != null)
                 {
                     ExtendedConsole.WriteErrorLine(ErrorString + ex.InnerException.Message);
                 }
+                Console.WriteLine();
             }
         }
 
-        public void PrintSummary(WrexAnalyzer.Summary summary)
+        public void PrintSummary(WrexAnalyzer.Summary summary, Wrex wrexInstance)
         {
-            const string title = "Summary:";
-            Console.WriteLine(title);
-            Console.WriteLine(new string('-', title.Length));
+            const string Title = "Summary:";
+            Console.WriteLine(Title);
+            Console.WriteLine(new string('-', Title.Length));
             Console.WriteLine();
             Console.WriteLine("Total time taken: {0}", summary.TotalTimeTaken);
             Console.WriteLine();
             Console.WriteLine("Fastest: {0}", summary.FastestTime);
             Console.WriteLine("Slowest: {0}", summary.SlowestTime);
             Console.WriteLine("Average: {0}", summary.AverageTime);
-            Console.WriteLine("Req/second: {0}", summary.RequestsPerSecond);
             Console.WriteLine();
+            Console.WriteLine("Requests/second: {0}", summary.RequestsPerSecond);
+            Console.WriteLine();
+            if (wrexInstance.SampleResponse != null)
+            {
+                Console.WriteLine("Response similarity count: " + wrexInstance.ResponseSimilarityCount);
+                Console.WriteLine();
+            }
         }
 
-        public void PrintStatusDistribution(IEnumerable<WrexAnalyzer.StatusCodeDistribution> statusDistributions)
+        public void PrintWrexOptions(WrexOptions wrexOptions)
+        {
+            foreach (var prop in wrexOptions.GetType().GetProperties())
+            {
+                var propType = prop.PropertyType;
+                var value = prop.GetValue(wrexOptions);
+                if (propType == typeof(WebHeaderCollection))
+                {
+                    var collection = (WebHeaderCollection)value;
+                    if (collection.Count > 0)
+                    {
+                        var sb = new StringBuilder();
+                        sb.AppendLine();
+                        sb.AppendLine();
+                        foreach (string item in collection)
+                        {
+                            sb.AppendLine(string.Format("  {0} : {1}", item, collection[item]));
+                        }
+                        value = sb.ToString();
+                    }
+                    else
+                    {
+                        value = string.Empty;
+                    }
+                }
+                else if (propType == typeof(IWebProxy))
+                {
+                    var proxy = ((WebProxy)value);
+                    if (proxy.Address != null)
+                    {
+                        value = proxy.Address.ToString();
+                    }
+                    else
+                    {
+                        value = string.Empty;
+                    }
+                }
+
+                if (value == null || value == string.Empty)
+                {
+                    value = "Not specified";
+                }
+
+                Console.WriteLine(prop.Name + " : " + value);
+            }
+        }
+
+        public void PrintStatusDistribution(IEnumerable<WrexAnalyzer.StatusCodeDistribution> statusDistributions, Wrex wrexInstance)
         {
             const string Title = "Status code distribution:";
             Console.WriteLine(Title);
@@ -149,6 +208,21 @@ namespace Wrex
             }
 
             Console.WriteLine();
+        }
+
+        public void PrintSampleResponse(Wrex wrexInstance)
+        {
+            if (wrexInstance.SampleResponse != null)
+            {
+                var reqHeight = Console.BufferHeight + wrexInstance.SampleResponse.Length;
+                Console.SetBufferSize(Console.BufferWidth, reqHeight >= Int16.MaxValue ? Int16.MaxValue - 1 : reqHeight);
+                const string Title = "Sample Response:";
+                Console.WriteLine(Title);
+                Console.WriteLine(new string('-', Title.Length));
+                Console.WriteLine();
+                Console.WriteLine(wrexInstance.SampleResponse);
+                Console.WriteLine();
+            }
         }
 
         public class DisplayProperties

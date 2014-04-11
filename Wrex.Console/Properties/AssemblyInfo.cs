@@ -1,9 +1,9 @@
 ﻿// Author: Prasanna V. Loganathar
-// Project: Wrex
+// Project: Wrex.Console
 // Copyright (c) Launchark. All rights reserved.
 // See License.txt in the project root for license information.
 //  
-// Created: 11:36 PM 03-04-2014
+// Created: 8:49 PM 10-04-2014
 
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,12 +12,12 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 
-[assembly: AssemblyTitle("Wrex")]
+[assembly: AssemblyTitle("Wrex Console")]
 [assembly: AssemblyDescription("Http-load testing tool.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Launchark")]
-[assembly: AssemblyProduct("Wrex")]
-[assembly: AssemblyCopyright("Copyright © 2014")]
+[assembly: AssemblyProduct("Wrex.Console")]
+[assembly: AssemblyCopyright("Copyright ©  2014")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,7 +29,7 @@ using System.Runtime.InteropServices;
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 
-[assembly: Guid("da0d800a-9899-4238-9e14-ade352302744")]
+[assembly: Guid("f33174d4-5561-4994-876b-d9bc4ae496af")]
 
 // Version information for an assembly consists of the following four values:
 //

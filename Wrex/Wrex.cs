@@ -11,21 +11,24 @@ namespace Wrex
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.IO;
     using System.Net;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
 
     public class Wrex
     {
         public const string DefaultContentType = "text/plain";
-        private ConcurrentBag<ResultValue> results;
-        public bool VerifyResponseMatch;
-        private int executedRequests;
 
-        public Wrex(WrexOptions options, bool verifyResponseMatch = false)
+        private ConcurrentBag<ResultValue> results;
+        private int executedRequests;
+        private ConcurrentStack<WebRequest> webRequestStack;
+        private int responseSimilarityCount;
+
+        public Wrex(WrexOptions options)
         {
             Options = options;
-            VerifyResponseMatch = verifyResponseMatch;
         }
 
         public WrexOptions Options { get; set; }
@@ -43,6 +46,18 @@ namespace Wrex
             }
         }
 
+        public int ResponseSimilarityCount
+        {
+            get
+            {
+                return responseSimilarityCount;
+            }
+            set
+            {
+                responseSimilarityCount = value;
+            }
+        }
+
         public TimeSpan TotalTimeTaken { get; set; }
 
         public IEnumerable<ResultValue> Results
@@ -55,11 +70,6 @@ namespace Wrex
 
         public async Task RunAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
         {
-            if (!Options.IsValidated)
-            {
-                Options.Validate(true);
-            }
-
             ExecutedRequests = 0;
             results = new ConcurrentBag<ResultValue>();
 
@@ -68,18 +78,20 @@ namespace Wrex
 
         public async Task ProcessAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
         {
+            BuildWebRequest();
+
             var sw = new Stopwatch();
             sw.Start();
 
-            Func<int, Task> action;
+            Func<Task> action;
 
             if (Options.MultiThreaded)
             {
-                action = x => Task.Run(async () => await ProcessTaskAsync(x, onProgress, onError).ConfigureAwait(false));
+                action = () => Task.Run(async () => await ProcessTaskAsync(onProgress, onError).ConfigureAwait(false));
             }
             else
             {
-                action = x => ProcessTaskAsync(x, onProgress, onError);
+                action = () => ProcessTaskAsync(onProgress, onError);
             }
 
             var i = 0;
@@ -96,35 +108,67 @@ namespace Wrex
 
                 while (i < target)
                 {
-                    tasks.Add(action(i));
+                    tasks.Add(action());
                     i++;
                 }
+
                 await Task.WhenAll(tasks).ConfigureAwait(false);
             }
             sw.Stop();
             TotalTimeTaken = sw.Elapsed;
         }
 
-        public async Task ProcessTaskAsync(int taskId, Action<int, ResultValue> onProgress, Action<Exception> onError)
+        public void BuildWebRequest()
+        {
+            webRequestStack = new ConcurrentStack<WebRequest>();
+            for (int i = 0; i < Options.NumberOfRequests; i++)
+            {
+                var request = WebRequest.CreateHttp(Options.Uri);
+                request.Headers = Options.HeaderCollection;
+                if (Options.ContentType != null)
+                {
+                    request.ContentType = Options.ContentType;
+                }
+                request.Method = Options.HttpMethod;
+                if (request.Method != "GET" && Options.RequestBody != null)
+                {
+                    var stream = request.GetRequestStream();
+                    var bytes = Encoding.UTF8.GetBytes(Options.RequestBody);
+                    stream.WriteAsync(bytes, 0, bytes.Length);
+                    stream.Close();
+                }
+                webRequestStack.Push(request);
+            }
+        }
+
+        public async Task ProcessTaskAsync(Action<int, ResultValue> onProgress, Action<Exception> onError)
         {
             var result = new ResultValue();
             var sw = new Stopwatch();
 
-            var webRequest = WebRequest.CreateHttp(Options.Uri);
-            webRequest.Headers = Options.HeaderCollection;
-            if (Options.ContentType != null)
-            {
-                webRequest.ContentType = Options.ContentType;
-            }
-            webRequest.Method = Options.HttpMethod;
-
             HttpWebResponse response = null;
             try
             {
+                WebRequest request;
+                webRequestStack.TryPop(out request);
                 sw.Start();
-                response = (HttpWebResponse)await webRequest.GetResponseAsync().ConfigureAwait(false);
+                response = (HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false);
                 sw.Stop();
                 result.StatusCode = response.StatusCode;
+                var stream = response.GetResponseStream();
+                if (stream != null)
+                {
+                    var strOut = await new StreamReader(stream).ReadToEndAsync();
+                    if (strOut == SampleResponse)
+                    {
+                        Interlocked.Increment(ref responseSimilarityCount);
+                    }
+                    else if (SampleResponse == null)
+                    {
+                        SampleResponse = strOut;
+                        Interlocked.Increment(ref responseSimilarityCount);
+                    }
+                }
             }
             catch (WebException ex)
             {
