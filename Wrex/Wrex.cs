@@ -25,6 +25,7 @@ namespace Wrex
         private int executedRequests;
         private ConcurrentStack<WebRequest> webRequestStack;
         private int responseSimilarityCount;
+        private int totalTransferedBytes;
 
         public Wrex(WrexOptions options)
         {
@@ -58,6 +59,18 @@ namespace Wrex
             }
         }
 
+        public int TotalTransferedBytes
+        {
+            get
+            {
+                return totalTransferedBytes;
+            }
+            set
+            {
+                totalTransferedBytes = value;
+            }
+        }
+
         public TimeSpan TotalTimeTaken { get; set; }
 
         public IEnumerable<ResultValue> Results
@@ -71,6 +84,9 @@ namespace Wrex
         public async Task RunAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
         {
             ExecutedRequests = 0;
+            TotalTransferedBytes = 0;
+            ResponseSimilarityCount = 0;
+
             results = new ConcurrentBag<ResultValue>();
 
             await ProcessAsync(onProgress, onError).ConfigureAwait(false);
@@ -162,6 +178,7 @@ namespace Wrex
                     if (strOut == SampleResponse)
                     {
                         Interlocked.Increment(ref responseSimilarityCount);
+                        Interlocked.Add(ref totalTransferedBytes, strOut.Length);
                     }
                     else if (SampleResponse == null)
                     {

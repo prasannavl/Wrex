@@ -33,6 +33,8 @@ namespace Wrex
             summary.RequestsPerSecond =
                 (int)(wrex.Options.NumberOfRequests / ((double)wrex.TotalTimeTaken.Ticks / TimeSpan.TicksPerSecond));
 
+            summary.TotalDataReceivedInBytes = wrex.TotalTransferedBytes;
+
             return summary;
         }
 

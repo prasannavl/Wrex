@@ -9,7 +9,6 @@ namespace Wrex.Console
 {
     using System;
     using System.Collections.Generic;
-    using System.Collections.Specialized;
     using System.Linq;
     using System.Net;
     using System.Text;
@@ -110,7 +109,11 @@ namespace Wrex.Console
             {
                 Console.WriteLine("Response similarity count: " + wrexInstance.ResponseSimilarityCount);
                 Console.WriteLine();
+                Console.WriteLine("Total number of bytes received: " + wrexInstance.TotalTransferedBytes);
+                Console.WriteLine("Average bytes/request: " + (double)wrexInstance.TotalTransferedBytes / wrexInstance.Options.NumberOfRequests);
+                Console.WriteLine();
             }
+
         }
 
         public void PrintWrexOptions(WrexOptions wrexOptions)
@@ -151,7 +154,7 @@ namespace Wrex.Console
                     }
                 }
 
-                if (value == null || value == string.Empty)
+                if (value == null || value.ToString().Equals(string.Empty))
                 {
                     value = "Not specified";
                 }

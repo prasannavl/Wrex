@@ -13,7 +13,7 @@ using System.Runtime.InteropServices;
 // associated with an assembly.
 
 [assembly: AssemblyTitle("Wrex")]
-[assembly: AssemblyDescription("Http-load testing tool.")]
+[assembly: AssemblyDescription("Event-based asynchronous http-load testing library.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Launchark")]
 [assembly: AssemblyProduct("Wrex")]
@@ -42,5 +42,5 @@ using System.Runtime.InteropServices;
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
 
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.0.2")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
