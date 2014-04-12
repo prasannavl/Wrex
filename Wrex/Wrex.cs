@@ -185,6 +185,10 @@ namespace Wrex
                         SampleResponse = strOut;
                         Interlocked.Increment(ref responseSimilarityCount);
                     }
+                    else
+                    {
+                        Interlocked.Add(ref totalTransferedBytes, strOut.Length);
+                    }
                 }
             }
             catch (WebException ex)
