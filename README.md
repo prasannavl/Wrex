@@ -1,9 +1,11 @@
 Wrex
 ====
 
-Wrex is an event-based asynchronous http-load testing tool. It can also use multi-threaded testing to emulate apache benchmark (ab). The default mode is to event-based, and single-threaded.
+Wrex is an event-based asynchronous http-load testing tool. It can also use multi-threaded testing to emulate apache benchmark (ab). The default mode is to event-based, and fully asynchronous.
 
-      Wrex 1.0.0.0
+Wrex.Console is console program that uses the library to run load-tests at command-line.
+
+      Wrex Console 1.5.1.0
       Http-load testing tool.
       Copyright 2014, Launchark.
       
