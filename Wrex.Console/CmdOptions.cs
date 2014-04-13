@@ -33,10 +33,10 @@ namespace Wrex.Console
         [Option('v', "verbose", HelpText = "Enable verbose output.", DefaultValue = false)]
         public bool Verbose { get; set; }
 
-        [Option('n', "requests", HelpText = "Number of requests.", DefaultValue = 1)]
+        [Option('n', "requests", HelpText = "Number of requests.", DefaultValue = 100)]
         public int NumberOfRequests { get; set; }
 
-        [Option('c', "concurrency", HelpText = "Concurrency level.", DefaultValue = 1)]
+        [Option('c', "concurrency", HelpText = "Concurrency level.", DefaultValue = 20)]
         public int Concurrency { get; set; }
 
         [Option('m', "method", HelpText = "HTTP request method.", DefaultValue = "GET")]

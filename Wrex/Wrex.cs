@@ -174,14 +174,7 @@ namespace Wrex
             }
         }
 
-        private void ResponseCallback(IAsyncResult ar)
-        {
-            var state = (ResponseState)ar.AsyncState;
-            HandleResponse(
-                state,
-                () => (HttpWebResponse)state.Request.EndGetResponse(ar),
-                (stream) => new StreamReader(stream).ReadToEndAsync().Result);
-        }
+
 
         private void HandleResponse(
             ResponseState state,
@@ -233,7 +226,11 @@ namespace Wrex
 
             Interlocked.Increment(ref executedRequests);
             HandleProgress(result);
+            SetOperationStatus();
+        }
 
+        private void SetOperationStatus()
+        {
             var itemsCompleted = Interlocked.Increment(ref completedItemsInGroup);
             if (itemsCompleted < groupTarget)
             {
@@ -243,9 +240,9 @@ namespace Wrex
             groupTask.TrySetResult(true);
         }
 
-        private HttpWebRequest CreateRequest()
+        private WebRequest CreateRequest()
         {
-            var request = WebRequest.CreateHttp(Options.Uri);
+            var request = WebRequest.Create(Options.Uri);
             request.Headers = Options.HeaderCollection;
             if (Options.ContentType != null)
             {
@@ -257,7 +254,7 @@ namespace Wrex
             {
                 var stream = request.GetRequestStream();
                 var bytes = Encoding.UTF8.GetBytes(Options.RequestBody);
-                stream.WriteAsync(bytes, 0, bytes.Length);
+                stream.Write(bytes, 0, bytes.Length);
                 stream.Close();
             }
 
@@ -269,11 +266,19 @@ namespace Wrex
             Task.Run(
                 () =>
                     {
-                        var request = CreateRequest();
-                        HandleResponse(
-                            new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() },
-                            () => (HttpWebResponse)request.GetResponse(),
-                            (stream) => new StreamReader(stream).ReadToEnd());
+                        try
+                        {
+                            var request = CreateRequest();
+                            HandleResponse(
+                                new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() },
+                                () => (HttpWebResponse)request.GetResponse(),
+                                (stream) => stream != null ? new StreamReader(stream).ReadToEnd() : null);
+                        }
+                        catch (Exception ex)
+                        {
+                            HandleError(ex);
+                            SetOperationStatus();
+                        }
                     });
         }
 
@@ -285,9 +290,18 @@ namespace Wrex
                 new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() });
         }
 
+        private void ResponseCallback(IAsyncResult ar)
+        {
+            var state = (ResponseState)ar.AsyncState;
+            HandleResponse(
+                state,
+                () => (HttpWebResponse)state.Request.EndGetResponse(ar),
+                (stream) => stream != null ? new StreamReader(stream).ReadToEndAsync().Result : null);
+        }
+
         private struct ResponseState
         {
-            public HttpWebRequest Request;
+            public WebRequest Request;
             public Stopwatch Stopwatch;
         }
 
