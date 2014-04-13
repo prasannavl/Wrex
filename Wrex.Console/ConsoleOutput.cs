@@ -107,8 +107,6 @@ namespace Wrex.Console
             Console.WriteLine();
             if (wrexInstance.SampleResponse != null)
             {
-                Console.WriteLine("Response similarity count: " + wrexInstance.ResponseSimilarityCount);
-                Console.WriteLine();
                 Console.WriteLine("Total number of bytes received: " + wrexInstance.TotalTransferedBytes);
                 Console.WriteLine("Average bytes/request: " + (double)wrexInstance.TotalTransferedBytes / wrexInstance.Options.NumberOfRequests);
                 Console.WriteLine();

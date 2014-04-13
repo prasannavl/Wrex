@@ -23,9 +23,12 @@ namespace Wrex
 
         private ConcurrentBag<ResultValue> results;
         private int executedRequests;
-        private ConcurrentStack<WebRequest> webRequestStack;
-        private int responseSimilarityCount;
         private int totalTransferedBytes;
+        private TaskCompletionSource<bool> groupTask;
+        private int completedItemsInGroup;
+        private int groupTarget;
+        private Action<int, ResultValue> onProgressAction;
+        private Action<Exception> onErrorAction;
 
         public Wrex(WrexOptions options)
         {
@@ -44,18 +47,6 @@ namespace Wrex
             private set
             {
                 executedRequests = value;
-            }
-        }
-
-        public int ResponseSimilarityCount
-        {
-            get
-            {
-                return responseSimilarityCount;
-            }
-            set
-            {
-                responseSimilarityCount = value;
             }
         }
 
@@ -81,153 +72,223 @@ namespace Wrex
             }
         }
 
+        public bool Started { get; private set; }
+        public bool Completed { get; private set; }
+
         public async Task RunAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
         {
+            if (Started && !Completed)
+            {
+                throw new Exception("Cannot run when an operation is already in progress.");
+            }
+
+            Started = true;
+
+            ServicePointManager.DefaultConnectionLimit = Options.Concurrency;
             ExecutedRequests = 0;
             TotalTransferedBytes = 0;
-            ResponseSimilarityCount = 0;
 
             results = new ConcurrentBag<ResultValue>();
+            onProgressAction = onProgress;
+            onErrorAction = onError;
 
-            await ProcessAsync(onProgress, onError).ConfigureAwait(false);
+            try
+            {
+                await ProcessAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Completed = true;
+            }
         }
 
-        public async Task ProcessAsync(Action<int, ResultValue> onProgress = null, Action<Exception> onError = null)
+        private async Task ProcessAsync()
         {
-            BuildWebRequest();
-
             var sw = new Stopwatch();
             sw.Start();
 
-            Func<Task> action;
+            groupTarget = Options.Concurrency;
 
+            var i = Options.NumberOfRequests;
+            var c = Options.Concurrency;
+
+            var x = 0;
+
+            Action fireRequest;
             if (Options.MultiThreaded)
             {
-                action = () => Task.Run(async () => await ProcessTaskAsync(onProgress, onError).ConfigureAwait(false));
+                fireRequest = FireRequest;
             }
             else
             {
-                action = () => ProcessTaskAsync(onProgress, onError);
+                fireRequest = FireRequestAsync;
             }
 
-            var i = 0;
-            while (i < Options.NumberOfRequests)
+            while (i > c)
             {
-                var target = Options.NumberOfRequests - i;
-                if (Options.Concurrency < target)
+                groupTask = new TaskCompletionSource<bool>();
+                completedItemsInGroup = 0;
+                x = 0;
+
+                for (; x < c; x++)
                 {
-                    target = Options.Concurrency;
+                    fireRequest();
                 }
 
-                var tasks = new List<Task>(target);
-                target = target + i;
-
-                while (i < target)
-                {
-                    tasks.Add(action());
-                    i++;
-                }
-
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                i = i - x;
+                await groupTask.Task.ConfigureAwait(false);
             }
+
+            if (i > 0)
+            {
+                groupTask = new TaskCompletionSource<bool>();
+                completedItemsInGroup = 0;
+                groupTarget = i;
+
+                while (i > 0)
+                {
+                    fireRequest();
+                    i--;
+                }
+
+                await groupTask.Task.ConfigureAwait(false);
+            }
+
             sw.Stop();
             TotalTimeTaken = sw.Elapsed;
         }
 
-        public void BuildWebRequest()
+        private void HandleError(Exception ex)
         {
-            webRequestStack = new ConcurrentStack<WebRequest>();
-            for (int i = 0; i < Options.NumberOfRequests; i++)
+            if (onErrorAction != null)
             {
-                var request = WebRequest.CreateHttp(Options.Uri);
-                request.Headers = Options.HeaderCollection;
-                if (Options.ContentType != null)
-                {
-                    request.ContentType = Options.ContentType;
-                }
-                request.Method = Options.HttpMethod;
-                if (request.Method != "GET" && Options.RequestBody != null)
-                {
-                    var stream = request.GetRequestStream();
-                    var bytes = Encoding.UTF8.GetBytes(Options.RequestBody);
-                    stream.WriteAsync(bytes, 0, bytes.Length);
-                    stream.Close();
-                }
-                webRequestStack.Push(request);
+                onErrorAction(ex);
             }
         }
 
-        public async Task ProcessTaskAsync(Action<int, ResultValue> onProgress, Action<Exception> onError)
+        private void HandleProgress(ResultValue result)
+        {
+            if (onProgressAction != null)
+            {
+                onProgressAction(ExecutedRequests, result);
+            }
+        }
+
+        private void ResponseCallback(IAsyncResult ar)
+        {
+            var state = (ResponseState)ar.AsyncState;
+            HandleResponse(
+                state,
+                () => (HttpWebResponse)state.Request.EndGetResponse(ar),
+                (stream) => new StreamReader(stream).ReadToEndAsync().Result);
+        }
+
+        private void HandleResponse(
+            ResponseState state,
+            Func<HttpWebResponse> getResponse,
+            Func<Stream, string> getResponseOutput)
         {
             var result = new ResultValue();
-            var sw = new Stopwatch();
-
-            HttpWebResponse response = null;
             try
             {
-                WebRequest request;
-                webRequestStack.TryPop(out request);
-                sw.Start();
-                response = (HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false);
-                sw.Stop();
-                result.StatusCode = response.StatusCode;
-                var stream = response.GetResponseStream();
-                if (stream != null)
+                using (var response = getResponse())
                 {
-                    var strOut = await new StreamReader(stream).ReadToEndAsync();
-                    if (strOut == SampleResponse)
+                    state.Stopwatch.Stop();
+                    result.StatusCode = response.StatusCode;
+
+                    using (var stream = response.GetResponseStream())
                     {
-                        Interlocked.Increment(ref responseSimilarityCount);
-                        Interlocked.Add(ref totalTransferedBytes, strOut.Length);
-                    }
-                    else if (SampleResponse == null)
-                    {
-                        SampleResponse = strOut;
-                        Interlocked.Increment(ref responseSimilarityCount);
-                    }
-                    else
-                    {
-                        Interlocked.Add(ref totalTransferedBytes, strOut.Length);
+                        if (stream != null)
+                        {
+                            var strOut = getResponseOutput(stream);
+                            if (!string.IsNullOrEmpty(strOut))
+                            {
+                                Interlocked.Add(ref totalTransferedBytes, strOut.Length);
+                                SampleResponse = strOut;
+                            }
+                        }
                     }
                 }
             }
             catch (WebException ex)
             {
-                sw.Stop();
+                state.Stopwatch.Stop();
                 if (ex.Response != null)
                 {
-                    var resp = (HttpWebResponse)ex.Response;
-                    result.StatusCode = resp.StatusCode;
-                    if (onError != null)
+                    using (var resp = (HttpWebResponse)ex.Response)
                     {
-                        onError(ex);
+                        result.StatusCode = resp.StatusCode;
+                        HandleError(ex);
                     }
                 }
             }
             catch (Exception ex)
             {
-                sw.Stop();
-                if (onError != null)
-                {
-                    onError(ex);
-                }
-            }
-            finally
-            {
-                if (response != null)
-                {
-                    response.Dispose();
-                }
+                state.Stopwatch.Stop();
+                HandleError(ex);
             }
 
-            result.TimeTaken = sw.Elapsed;
+            result.TimeTaken = state.Stopwatch.Elapsed;
             results.Add(result);
-            Interlocked.Increment(ref executedRequests);
 
-            if (onProgress != null)
+            Interlocked.Increment(ref executedRequests);
+            HandleProgress(result);
+
+            var itemsCompleted = Interlocked.Increment(ref completedItemsInGroup);
+            if (itemsCompleted < groupTarget)
             {
-                onProgress(ExecutedRequests, result);
+                return;
             }
+
+            groupTask.TrySetResult(true);
+        }
+
+        private HttpWebRequest CreateRequest()
+        {
+            var request = WebRequest.CreateHttp(Options.Uri);
+            request.Headers = Options.HeaderCollection;
+            if (Options.ContentType != null)
+            {
+                request.ContentType = Options.ContentType;
+            }
+
+            request.Method = Options.HttpMethod;
+            if (!request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) && Options.RequestBody != null)
+            {
+                var stream = request.GetRequestStream();
+                var bytes = Encoding.UTF8.GetBytes(Options.RequestBody);
+                stream.WriteAsync(bytes, 0, bytes.Length);
+                stream.Close();
+            }
+
+            return request;
+        }
+
+        private void FireRequest()
+        {
+            Task.Run(
+                () =>
+                    {
+                        var request = CreateRequest();
+                        HandleResponse(
+                            new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() },
+                            () => (HttpWebResponse)request.GetResponse(),
+                            (stream) => new StreamReader(stream).ReadToEnd());
+                    });
+        }
+
+        private void FireRequestAsync()
+        {
+            var request = CreateRequest();
+            request.BeginGetResponse(
+                ResponseCallback,
+                new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() });
+        }
+
+        private struct ResponseState
+        {
+            public HttpWebRequest Request;
+            public Stopwatch Stopwatch;
         }
 
         public class ResultValue

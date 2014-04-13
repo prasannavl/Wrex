@@ -8,6 +8,7 @@
 namespace Wrex.Console
 {
     using System;
+    using System.Diagnostics;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
@@ -83,7 +84,7 @@ namespace Wrex.Console
                 }
 
                 var cancelSource = new CancellationTokenSource();
-                var progressDisplayTask = consoleOut.ShowProgress(wrex, cancelSource.Token);
+                var progressDisplayTask = Task.Run(() => consoleOut.ShowProgress(wrex, cancelSource.Token));
                 await wrex.RunAsync(null, consoleOut.HandleError);
 
                 cancelSource.Cancel();
@@ -106,7 +107,8 @@ namespace Wrex.Console
                 {
                     Console.WriteLine();
                     Console.WriteLine();
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine("Error: " + ex.Message);
+                    Console.WriteLine(ex.StackTrace);
                 }
             }
         }
