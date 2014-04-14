@@ -23,8 +23,13 @@ namespace Wrex
         public string HttpMethod { get; set; }
         public string RequestBody { get; set; }
         public string ContentType { get; set; }
-        public bool MultiThreaded { get; set; }
+        public bool ThreadedSynchronousMode { get; set; }
         public IWebProxy Proxy { get; set; }
         public Uri Uri { get; set; }
+
+        /// <summary>
+        /// Timeout in milliseconds, before the request times out.
+        /// </summary>
+        public int Timeout { get; set; }
     }
 }

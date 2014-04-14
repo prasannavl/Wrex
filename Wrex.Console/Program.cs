@@ -8,17 +8,21 @@
 namespace Wrex.Console
 {
     using System;
-    using System.Diagnostics;
     using System.Linq;
+    using System.Runtime.CompilerServices;
     using System.Threading;
     using System.Threading.Tasks;
 
     using CommandLine.Text;
 
+    using ConsoleUtils;
+
     using Nito.AsyncEx;
 
     internal class Program
     {
+        public static bool IsMono = Type.GetType("Mono.Runtime") != null;
+
         private static void Main(string[] args)
         {
             try
@@ -85,7 +89,19 @@ namespace Wrex.Console
 
                 var cancelSource = new CancellationTokenSource();
                 var progressDisplayTask = Task.Run(() => consoleOut.ShowProgress(wrex, cancelSource.Token));
-                await wrex.RunAsync(null, consoleOut.HandleError);
+                await wrex.RunAsync(
+                    null,
+                    ex =>
+                        {
+                            if (cmdOptions.Verbose)
+                            {
+                                consoleOut.HandleError(ex);
+                            }
+                            else
+                            {
+                                Ignore();
+                            }
+                        });
 
                 cancelSource.Cancel();
                 await progressDisplayTask;
@@ -107,10 +123,19 @@ namespace Wrex.Console
                 {
                     Console.WriteLine();
                     Console.WriteLine();
-                    Console.WriteLine("Error: " + ex.Message);
-                    Console.WriteLine(ex.StackTrace);
+                    ExtendedConsole.WriteErrorLine("Error: " + ex.Message);
+                    if (cmdOptions.Verbose)
+                    {
+                        Console.WriteLine("Details: ");
+                        Console.WriteLine(ex.StackTrace);
+                    }
                 }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Ignore()
+        {
         }
     }
 }

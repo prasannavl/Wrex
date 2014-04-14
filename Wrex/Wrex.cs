@@ -85,6 +85,10 @@ namespace Wrex
             Started = true;
 
             ServicePointManager.DefaultConnectionLimit = Options.Concurrency;
+            ServicePointManager.MaxServicePoints = Options.NumberOfRequests;
+            ServicePointManager.SetTcpKeepAlive(true, 45000, 20000);
+            ServicePointManager.MaxServicePointIdleTime = 20000;
+
             ExecutedRequests = 0;
             TotalTransferedBytes = 0;
 
@@ -115,7 +119,7 @@ namespace Wrex
             var x = 0;
 
             Action fireRequest;
-            if (Options.MultiThreaded)
+            if (Options.ThreadedSynchronousMode)
             {
                 fireRequest = FireRequest;
             }
@@ -145,10 +149,9 @@ namespace Wrex
                 completedItemsInGroup = 0;
                 groupTarget = i;
 
-                while (i > 0)
+                for (; i > 0; i--)
                 {
                     fireRequest();
-                    i--;
                 }
 
                 await groupTask.Task.ConfigureAwait(false);
@@ -174,8 +177,6 @@ namespace Wrex
             }
         }
 
-
-
         private void HandleResponse(
             ResponseState state,
             Func<HttpWebResponse> getResponse,
@@ -188,16 +189,23 @@ namespace Wrex
                 {
                     state.Stopwatch.Stop();
                     result.StatusCode = response.StatusCode;
-
                     using (var stream = response.GetResponseStream())
                     {
                         if (stream != null)
                         {
-                            var strOut = getResponseOutput(stream);
-                            if (!string.IsNullOrEmpty(strOut))
+                            if (response.ContentLength > 0 && SampleResponse != null)
                             {
-                                Interlocked.Add(ref totalTransferedBytes, strOut.Length);
-                                SampleResponse = strOut;
+                                Interlocked.Add(ref totalTransferedBytes, (int)response.ContentLength);
+                            }
+                            else
+                            {
+                                var strOut = getResponseOutput(stream);
+
+                                if (!string.IsNullOrEmpty(strOut))
+                                {
+                                    Interlocked.Add(ref totalTransferedBytes, strOut.Length);
+                                    SampleResponse = strOut;
+                                }
                             }
                         }
                     }
@@ -249,6 +257,7 @@ namespace Wrex
                 request.ContentType = Options.ContentType;
             }
 
+            request.Timeout = Options.Timeout;
             request.Method = Options.HttpMethod;
             if (!request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) && Options.RequestBody != null)
             {

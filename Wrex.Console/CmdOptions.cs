@@ -66,9 +66,9 @@ namespace Wrex.Console
         [Option('p', "proxy", HelpText = "Proxy address as host:port")]
         public string ProxyAddressString { get; set; }
 
-        [Option('T', "use-threads", HelpText = "Use multi-threaded testing, instead of an event-based pattern.",
+        [Option('s', "threaded-sync", HelpText = "Use synchronous multi-threaded testing, instead of an event-based pattern.",
             DefaultValue = false)]
-        public bool MultiThreaded { get; set; }
+        public bool ThreadedSynchronousMode { get; set; }
 
         public IWebProxy Proxy
         {
@@ -96,6 +96,10 @@ namespace Wrex.Console
                 uri = value;
             }
         }
+
+        [Option('T', "timeout", HelpText = "Timeout in milliseconds for each request", DefaultValue = 10000)]
+        
+        public int Timeout { get; set; }
 
         public ValidationResult Validate()
         {
@@ -177,8 +181,9 @@ namespace Wrex.Console
                            ContentType = ContentType,
                            HeaderCollection = HeaderCollection,
                            HttpMethod = HttpMethod,
-                           MultiThreaded = MultiThreaded,
-                           RequestBody = RequestBody
+                           ThreadedSynchronousMode = ThreadedSynchronousMode,
+                           RequestBody = RequestBody,
+                           Timeout = Timeout,
                        };
         }
 

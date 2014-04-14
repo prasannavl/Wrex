@@ -11,6 +11,7 @@ namespace Wrex.Console
     using System.Collections.Generic;
     using System.Linq;
     using System.Net;
+    using System.Runtime.CompilerServices;
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
@@ -28,6 +29,7 @@ namespace Wrex.Console
 
         public async Task ShowProgress(Wrex wrexInstance, CancellationToken token)
         {
+            const int DelayConstant = 500;
             bool firstRun = true;
             while (!token.IsCancellationRequested)
             {
@@ -37,7 +39,7 @@ namespace Wrex.Console
                 }
                 else
                 {
-                    await Task.Delay(500);
+                    await Task.Delay(DelayConstant);
                 }
                 WriteProgress(wrexInstance.ExecutedRequests, wrexInstance.Options.NumberOfRequests);
             }
@@ -47,7 +49,8 @@ namespace Wrex.Console
             Console.WriteLine();
         }
 
-        private void WriteProgress(int count, int total)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteProgress(int count, int total)
         {
             var progressCounter = count;
             var progressFraction = ((double)progressCounter / total);
@@ -75,6 +78,7 @@ namespace Wrex.Console
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void HandleError(Exception ex)
         {
             const string ErrorString = "Error: ";
@@ -83,6 +87,7 @@ namespace Wrex.Console
                 Console.WriteLine();
                 Console.WriteLine();
                 ExtendedConsole.WriteErrorLine(ErrorString + ex.Message);
+                Console.WriteLine();
                 if (ex.InnerException != null)
                 {
                     ExtendedConsole.WriteErrorLine(ErrorString + ex.InnerException.Message);
@@ -108,10 +113,11 @@ namespace Wrex.Console
             if (wrexInstance.SampleResponse != null)
             {
                 Console.WriteLine("Total number of bytes received: " + wrexInstance.TotalTransferedBytes);
-                Console.WriteLine("Average bytes/request: " + (double)wrexInstance.TotalTransferedBytes / wrexInstance.Options.NumberOfRequests);
+                Console.WriteLine(
+                    "Average bytes/request: "
+                    + (double)wrexInstance.TotalTransferedBytes / wrexInstance.Options.NumberOfRequests);
                 Console.WriteLine();
             }
-
         }
 
         public void PrintWrexOptions(WrexOptions wrexOptions)
@@ -161,21 +167,44 @@ namespace Wrex.Console
             }
         }
 
-        public void PrintStatusDistribution(IEnumerable<WrexAnalyzer.StatusCodeDistribution> statusDistributions, Wrex wrexInstance)
+        public void PrintStatusDistribution(
+            IEnumerable<WrexAnalyzer.StatusCodeDistribution> statusDistributions,
+            Wrex wrexInstance)
         {
             const string Title = "Status code distribution:";
             Console.WriteLine(Title);
             Console.WriteLine(new string('-', Title.Length));
             Console.WriteLine();
-            statusDistributions.ToList()
-                .ForEach(
-                    x =>
-                    Console.WriteLine(
-                        "{0} [{1}] : {2} response{3}",
-                        (int)x.Status,
-                        x.Status.ToString(),
-                        x.ResponseCount,
-                        x.ResponseCount > 1 ? "s" : string.Empty));
+            statusDistributions.ToList().ForEach(
+                x =>
+                    {
+                        var statusCode = (int)x.Status;
+                        var outputString = string.Empty;
+                        if (statusCode == 0)
+                        {
+                            outputString = string.Format("0 [ConnectionFailed] : {0}", x.ResponseCount);
+                        }
+                        else
+                        {
+                            outputString = string.Format(
+                                "{0} [{1}] : {2} response{3}",
+                                statusCode,
+                                x.Status.ToString(),
+                                x.ResponseCount,
+                                x.ResponseCount > 1 ? "s" : string.Empty);
+                        }
+
+
+                        if (statusCode < 200 || statusCode > 299)
+                        {
+                            ExtendedConsole.WriteErrorLine(outputString);
+                        }
+                        else
+                        {
+                            Console.WriteLine(outputString);
+                        }
+                    });
+
             Console.WriteLine();
         }
 
@@ -215,8 +244,14 @@ namespace Wrex.Console
         {
             if (wrexInstance.SampleResponse != null)
             {
-                var reqHeight = Console.BufferHeight + wrexInstance.SampleResponse.Length;
-                Console.SetBufferSize(Console.BufferWidth, reqHeight >= Int16.MaxValue ? Int16.MaxValue - 1 : reqHeight);
+                // Set console buffer size on Windows.
+                if (!Program.IsMono)
+                {
+                    var reqHeight = Console.BufferHeight + wrexInstance.SampleResponse.Length;
+                    Console.SetBufferSize(
+                        Console.BufferWidth,
+                        reqHeight >= Int16.MaxValue ? Int16.MaxValue - 1 : reqHeight);
+                }
                 const string Title = "Sample Response:";
                 Console.WriteLine(Title);
                 Console.WriteLine(new string('-', Title.Length));
