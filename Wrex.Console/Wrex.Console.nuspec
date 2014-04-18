@@ -7,10 +7,9 @@
     <authors>$author$ , Prasanna V. Loganathar</authors>
     <owners>$author$</owners>
     <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.txt</licenseUrl>
-    <projectUrl>https://github.com/launchark/Wrex</projectUrl>
+    <projectUrl>https://github.com/prasannavl/Wrex</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>$description$</description>
-    <releaseNotes>First NuGet release.</releaseNotes>
     <copyright>Copyright 2014</copyright>
     <tags>http wrex load test asynchronous</tags>
   </metadata>

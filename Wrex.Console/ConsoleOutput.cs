@@ -1,7 +1,19 @@
 ﻿// Author: Prasanna V. Loganathar
 // Project: Wrex.Console
-// Copyright (c) Launchark. All rights reserved.
-// See License.txt in the project root for license information.
+// 
+// Copyright 2014 Launchark. All Rights Reserved.
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     http://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //  
 // Created: 8:50 PM 10-04-2014
 
@@ -20,17 +32,12 @@ namespace Wrex.Console
 
     internal class ConsoleOutput
     {
-        private readonly DisplayProperties properties;
+        private FixedWidthInfomativeProgressBar progressBar;
 
-        public ConsoleOutput()
-        {
-            properties = new DisplayProperties();
-        }
-
-        public async Task ShowProgress(Wrex wrexInstance, CancellationToken token)
+        public async Task StartProgressWriter(Wrex wrexInstance, CancellationToken token)
         {
             const int DelayConstant = 500;
-            bool firstRun = true;
+            var firstRun = true;
             while (!token.IsCancellationRequested)
             {
                 if (firstRun)
@@ -52,29 +59,13 @@ namespace Wrex.Console
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteProgress(int count, int total)
         {
-            var progressCounter = count;
-            var progressFraction = ((double)progressCounter / total);
-
-            if (!properties.IsEvaluated)
-            {
-                properties.Evaluate(total);
-            }
-
             lock (Console.Out)
             {
-                var currrentRequests = progressCounter.ToString().PadLeft(properties.RequestNumberStringLength, ' ');
-                Console.Write(currrentRequests + " / " + total);
-                Console.Write(" ");
-                Console.Write("[");
-                var currentIndicatorLength = (int)(progressFraction * properties.MaxLength);
-                Console.Write(new string('=', currentIndicatorLength));
-                Console.Write(new string(' ', properties.MaxLength - currentIndicatorLength));
-                Console.Write("]");
-                Console.Write(" ");
-                var progress = (progressFraction * 100).ToString("###0.##").PadLeft(5, ' ');
-                Console.Write("{0}", progress);
-                Console.Write(" %");
-                Console.Write("\r");
+                if (progressBar == null)
+                {
+                    progressBar = new FixedWidthInfomativeProgressBar(total);
+                }
+                progressBar.UpdateProgress(count);
             }
         }
 
@@ -88,9 +79,17 @@ namespace Wrex.Console
                 Console.WriteLine();
                 ExtendedConsole.WriteErrorLine(ErrorString + ex.Message);
                 Console.WriteLine();
-                if (ex.InnerException != null)
+                if (ex.GetType() == typeof(AggregateException))
                 {
-                    ExtendedConsole.WriteErrorLine(ErrorString + ex.InnerException.Message);
+                    var ae = (AggregateException)ex;
+                    {
+                        ae.Handle(
+                            (e) =>
+                                {
+                                    ExtendedConsole.WriteErrorLine(ErrorString + e.Message);
+                                    return true;
+                                });
+                    }
                 }
                 Console.WriteLine();
             }
@@ -179,7 +178,7 @@ namespace Wrex.Console
                 x =>
                     {
                         var statusCode = (int)x.Status;
-                        var outputString = string.Empty;
+                        string outputString;
                         if (statusCode == 0)
                         {
                             outputString = string.Format("0 [ConnectionFailed] : {0}", x.ResponseCount);
@@ -193,7 +192,6 @@ namespace Wrex.Console
                                 x.ResponseCount,
                                 x.ResponseCount > 1 ? "s" : string.Empty);
                         }
-
 
                         if (statusCode < 200 || statusCode > 299)
                         {
@@ -244,34 +242,14 @@ namespace Wrex.Console
         {
             if (wrexInstance.SampleResponse != null)
             {
-                // Set console buffer size on Windows.
-                if (!Program.IsMono)
-                {
-                    var reqHeight = Console.BufferHeight + wrexInstance.SampleResponse.Length;
-                    Console.SetBufferSize(
-                        Console.BufferWidth,
-                        reqHeight >= Int16.MaxValue ? Int16.MaxValue - 1 : reqHeight);
-                }
+                // Increase buffer size if possible.
+                ExtendedConsole.SetConsoleBuffer(Console.BufferHeight + wrexInstance.SampleResponse.Length);
                 const string Title = "Sample Response:";
                 Console.WriteLine(Title);
                 Console.WriteLine(new string('-', Title.Length));
                 Console.WriteLine();
                 Console.WriteLine(wrexInstance.SampleResponse);
                 Console.WriteLine();
-            }
-        }
-
-        public class DisplayProperties
-        {
-            public int MaxLength;
-            public int RequestNumberStringLength;
-            public bool IsEvaluated = false;
-
-            public void Evaluate(int totalRequests)
-            {
-                RequestNumberStringLength = totalRequests.ToString().Length;
-                MaxLength = (Console.WindowWidth - 20 - (RequestNumberStringLength * 2));
-                IsEvaluated = true;
             }
         }
     }

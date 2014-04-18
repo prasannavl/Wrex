@@ -1,7 +1,19 @@
 ﻿// Author: Prasanna V. Loganathar
 // Project: Wrex.Console
-// Copyright (c) Launchark. All rights reserved.
-// See License.txt in the project root for license information.
+// 
+// Copyright 2014 Launchark. All Rights Reserved.
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     http://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //  
 // Created: 8:50 PM 10-04-2014
 
@@ -66,7 +78,8 @@ namespace Wrex.Console
         [Option('p', "proxy", HelpText = "Proxy address as host:port")]
         public string ProxyAddressString { get; set; }
 
-        [Option('s', "threaded-sync", HelpText = "Use synchronous multi-threaded testing, instead of an event-based pattern.",
+        [Option('s', "threaded-sync",
+            HelpText = "Use synchronous multi-threaded testing, instead of an event-based pattern.",
             DefaultValue = false)]
         public bool ThreadedSynchronousMode { get; set; }
 
@@ -98,7 +111,6 @@ namespace Wrex.Console
         }
 
         [Option('T', "timeout", HelpText = "Timeout in milliseconds for each request", DefaultValue = 10000)]
-        
         public int Timeout { get; set; }
 
         public ValidationResult Validate()
