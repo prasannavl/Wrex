@@ -46,6 +46,7 @@ Works on both Windows, Linux and Mac through Mono.
       
         -p, --proxy          Proxy address as host:port
       
-        -s, --threaded-sync  (Default: False) Use synchronous multi-threaded testing, instead of an event-based pattern.
+        -s, --threaded-sync  (Default: False) Use synchronous multi-threaded testing,
+                              instead of an event-based pattern.
       
         -h, --help           Display this screen.
