@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //  
-// Created: 1:29 PM 07-04-2014
+// Created: 4:10 AM 19-04-2014
 
 namespace Wrex
 {
@@ -36,11 +36,10 @@ namespace Wrex
         private ConcurrentBag<ResultValue> results;
         private int executedRequests;
         private int totalTransferedBytes;
-        private TaskCompletionSource<bool> groupTask;
-        private int completedItemsInGroup;
-        private int groupTarget;
         private Action<int, ResultValue> onProgressAction;
         private Action<Exception> onErrorAction;
+        private SemaphoreSlim throttle;
+        private TaskCompletionSource<bool> completion;
 
         public Wrex(WrexOptions options)
         {
@@ -96,11 +95,6 @@ namespace Wrex
 
             Started = true;
 
-            ServicePointManager.DefaultConnectionLimit = Options.Concurrency;
-            ServicePointManager.MaxServicePoints = Options.NumberOfRequests;
-            ServicePointManager.SetTcpKeepAlive(true, 45000, 20000);
-            ServicePointManager.MaxServicePointIdleTime = 20000;
-
             ExecutedRequests = 0;
             TotalTransferedBytes = 0;
 
@@ -120,16 +114,6 @@ namespace Wrex
 
         private async Task ProcessAsync()
         {
-            var sw = new Stopwatch();
-            sw.Start();
-
-            groupTarget = Options.Concurrency;
-
-            var i = Options.NumberOfRequests;
-            var c = Options.Concurrency;
-
-            var x = 0;
-
             Action fireRequest;
             if (Options.ThreadedSynchronousMode)
             {
@@ -140,34 +124,17 @@ namespace Wrex
                 fireRequest = FireRequestAsync;
             }
 
-            while (i > c)
+            throttle = new SemaphoreSlim(Options.Concurrency);
+            completion = new TaskCompletionSource<bool>();
+
+            var sw = Stopwatch.StartNew();
+
+            for (int i = 0; i < Options.NumberOfRequests; i++)
             {
-                groupTask = new TaskCompletionSource<bool>();
-                completedItemsInGroup = 0;
-                x = 0;
-
-                for (; x < c; x++)
-                {
-                    fireRequest();
-                }
-
-                i = i - x;
-                await groupTask.Task.ConfigureAwait(false);
+                throttle.Wait();
+                fireRequest();
             }
-
-            if (i > 0)
-            {
-                groupTask = new TaskCompletionSource<bool>();
-                completedItemsInGroup = 0;
-                groupTarget = i;
-
-                for (; i > 0; i--)
-                {
-                    fireRequest();
-                }
-
-                await groupTask.Task.ConfigureAwait(false);
-            }
+            await completion.Task;
 
             sw.Stop();
             TotalTimeTaken = sw.Elapsed;
@@ -251,13 +218,11 @@ namespace Wrex
 
         private void SetOperationStatus()
         {
-            var itemsCompleted = Interlocked.Increment(ref completedItemsInGroup);
-            if (itemsCompleted < groupTarget)
+            throttle.Release();
+            if (executedRequests == Options.NumberOfRequests)
             {
-                return;
+                completion.SetResult(true);
             }
-
-            groupTask.TrySetResult(true);
         }
 
         private WebRequest CreateRequest()
@@ -317,7 +282,7 @@ namespace Wrex
             HandleResponse(
                 state,
                 () => (HttpWebResponse)state.Request.EndGetResponse(ar),
-                (stream) => stream != null ? new StreamReader(stream).ReadToEndAsync().Result : null);
+                (stream) => stream != null ? new StreamReader(stream).ReadToEnd() : null);
         }
 
         private struct ResponseState

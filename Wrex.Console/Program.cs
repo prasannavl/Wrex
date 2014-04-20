@@ -98,7 +98,7 @@ namespace Wrex.Console
                 }
 
                 var cancelSource = new CancellationTokenSource();
-                var progressDisplayTask = consoleOut.StartProgressWriter(wrex, cancelSource.Token);
+                var progressDisplayTask = Task.Run(() => consoleOut.StartProgressWriter(wrex, cancelSource.Token));
                 await wrex.RunAsync(
                     null,
                     ex =>
