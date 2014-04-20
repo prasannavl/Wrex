@@ -131,7 +131,7 @@ namespace Wrex
 
             for (int i = 0; i < Options.NumberOfRequests; i++)
             {
-                throttle.Wait();
+                await throttle.WaitAsync();
                 fireRequest();
             }
             await completion.Task;
