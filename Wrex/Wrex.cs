@@ -129,16 +129,64 @@ namespace Wrex
 
             var sw = Stopwatch.StartNew();
 
+            // ThreadPool.QueueUserWorkItem(StartNonIntrusiveAsyncCallbackTimeout, this);
+
             for (int i = 0; i < Options.NumberOfRequests; i++)
             {
                 await throttle.WaitAsync();
                 fireRequest();
             }
-            await completion.Task;
-
-            sw.Stop();
-            TotalTimeTaken = sw.Elapsed;
+            try
+            {
+                await completion.Task;
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex);
+            }
+            finally
+            {
+                sw.Stop();
+                TotalTimeTaken = sw.Elapsed;
+            }
         }
+
+        // Cancellation - Method 1 - Non intensive, non-accurate.
+        // 
+        //private List<State> activeAsyncList = new List<State>();
+        // 
+        //private async void StartNonIntrusiveAsyncCallbackTimeout(object wrexInstanceWrapper)
+        //{
+        //    var instance = (Wrex)wrexInstanceWrapper;
+        //    var lastValue = 0;
+        //    while (true)
+        //    {
+        //        await Task.Delay(instance.Options.Timeout);
+        //        var exec = instance.ExecutedRequests;
+        //        if (lastValue == exec)
+        //        {
+        //            lastValue = exec;
+        //            try
+        //            {
+        //                foreach (var queue in activeAsyncList)
+        //                {
+        //                    try
+        //                    {
+        //                        queue.Request.Abort();
+        //                        queue.AsyncResult.AsyncWaitHandle.Dispose();
+        //                    }
+        //                    catch
+        //                    {
+        //                    }
+        //                    completion.TrySetException(new Exception("Request timed out."));
+        //                }
+        //            }
+        //            catch
+        //            {
+        //            }
+        //        }
+        //    }
+        //}
 
         private void HandleError(Exception ex)
         {
@@ -157,32 +205,30 @@ namespace Wrex
         }
 
         private void HandleResponse(
-            ResponseState state,
-            Func<HttpWebResponse> getResponse,
+            State state,
+            Func<State, HttpWebResponse> getResponse,
             Func<Stream, string> getResponseOutput)
         {
+            state.Stopwatch.Stop();
+            // activeAsyncList.Remove(state);
             var result = new ResultValue();
+
             try
             {
-                using (var response = getResponse())
+                using (var response = getResponse(state))
                 {
-                    state.Stopwatch.Stop();
                     result.StatusCode = response.StatusCode;
                     using (var stream = response.GetResponseStream())
                     {
                         if (stream != null)
                         {
-                            if (response.ContentLength > 0 && SampleResponse != null)
-                            {
-                                Interlocked.Add(ref totalTransferedBytes, (int)response.ContentLength);
-                            }
-                            else
-                            {
-                                var strOut = getResponseOutput(stream);
+                            var strOut = getResponseOutput(stream);
 
-                                if (!string.IsNullOrEmpty(strOut))
+                            if (!string.IsNullOrEmpty(strOut))
+                            {
+                                Interlocked.Add(ref totalTransferedBytes, strOut.Length);
+                                if (SampleResponse == null)
                                 {
-                                    Interlocked.Add(ref totalTransferedBytes, strOut.Length);
                                     SampleResponse = strOut;
                                 }
                             }
@@ -256,9 +302,9 @@ namespace Wrex
                         {
                             var request = CreateRequest();
                             HandleResponse(
-                                new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() },
-                                () => (HttpWebResponse)request.GetResponse(),
-                                (stream) => stream != null ? new StreamReader(stream).ReadToEnd() : null);
+                                new State { Request = request, Stopwatch = Stopwatch.StartNew() },
+                                GetResponse,
+                                GetStringFromStream);
                         }
                         catch (Exception ex)
                         {
@@ -268,33 +314,76 @@ namespace Wrex
                     });
         }
 
+        private static HttpWebResponse GetResponse(State state)
+        {
+            return (HttpWebResponse)state.Request.GetResponse();
+        }
+
+        private static HttpWebResponse GetResponseAsync(State state)
+        {
+            return (HttpWebResponse)state.Request.EndGetResponse(state.AsyncResult);
+        }
+
+        private static string GetStringFromStream(Stream stream)
+        {
+            return stream != null ? new StreamReader(stream).ReadToEnd() : null;
+        }
+
         private void FireRequestAsync()
         {
             var request = CreateRequest();
-            request.BeginGetResponse(
-                ResponseCallback,
-                new ResponseState { Request = request, Stopwatch = Stopwatch.StartNew() });
+            var state = new State { Request = request, Stopwatch = Stopwatch.StartNew() };
+            request.BeginGetResponse(ResponseCallback, state);
+
+            //state.AsyncResult = iar;
+            //activeAsyncList.Add(state);
+            // ThreadPool.RegisterWaitForSingleObject(iar.AsyncWaitHandle, HandleTimeout, state, Options.Timeout, true);
         }
+
+        // Proper method for cancellation.
+        // Too intensive on high-concurrency, which is the normal scenario.
+        // 
+        //private void HandleTimeout(object stateObject, bool timedOut)
+        //{
+        //    if (timedOut)
+        //    {
+        //        var state = (State)stateObject;
+        //        if (!state.AsyncResult.IsCompleted)
+        //        {
+        //            // Time out the operation in a lock-free manner. 
+        //            // Interlocked.CompareExchange(ref state.TimedOutState, 1, 0);
+        //            state.Request.Abort();
+        //            state.Stopwatch.Stop();
+        //            state.AsyncResult.AsyncWaitHandle.Dispose();
+        //            HandleError(new Exception("Operation timed out."));
+        //            Interlocked.Increment(ref executedRequests);
+        //            SetOperationStatus();
+        //        }
+        //    }
+        //}
 
         private void ResponseCallback(IAsyncResult ar)
         {
-            var state = (ResponseState)ar.AsyncState;
-            HandleResponse(
-                state,
-                () => (HttpWebResponse)state.Request.EndGetResponse(ar),
-                (stream) => stream != null ? new StreamReader(stream).ReadToEnd() : null);
-        }
+            // Make sure the operation hasn't timed out, in a synchronized way.
+            // if (Interlocked.CompareExchange(ref state.TimedOutState, 1, 1) == 1) return;
 
-        private struct ResponseState
-        {
-            public WebRequest Request;
-            public Stopwatch Stopwatch;
+            var state = (State)ar.AsyncState;
+            state.AsyncResult = ar;
+            HandleResponse(state, GetResponseAsync, GetStringFromStream);
         }
 
         public class ResultValue
         {
             public TimeSpan TimeTaken { get; set; }
             public HttpStatusCode StatusCode { get; set; }
+        }
+
+        private class State
+        {
+            // public int TimedOutState;
+            public WebRequest Request;
+            public Stopwatch Stopwatch;
+            public IAsyncResult AsyncResult;
         }
     }
 }

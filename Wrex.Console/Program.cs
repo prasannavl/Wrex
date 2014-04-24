@@ -21,7 +21,6 @@ namespace Wrex.Console
 {
     using System;
     using System.Linq;
-    using System.Runtime.CompilerServices;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -109,7 +108,7 @@ namespace Wrex.Console
                             }
                             else
                             {
-                                Ignore();
+                                NoOp();
                             }
                         });
 
@@ -144,8 +143,7 @@ namespace Wrex.Console
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void Ignore()
+        private static void NoOp()
         {
         }
     }

@@ -174,35 +174,34 @@ namespace Wrex.Console
             Console.WriteLine(Title);
             Console.WriteLine(new string('-', Title.Length));
             Console.WriteLine();
-            statusDistributions.ToList().ForEach(
-                x =>
-                    {
-                        var statusCode = (int)x.Status;
-                        string outputString;
-                        if (statusCode == 0)
-                        {
-                            outputString = string.Format("0 [ConnectionFailed] : {0}", x.ResponseCount);
-                        }
-                        else
-                        {
-                            outputString = string.Format(
-                                "{0} [{1}] : {2} response{3}",
-                                statusCode,
-                                x.Status.ToString(),
-                                x.ResponseCount,
-                                x.ResponseCount > 1 ? "s" : string.Empty);
-                        }
 
-                        if (statusCode < 200 || statusCode > 299)
-                        {
-                            ExtendedConsole.WriteErrorLine(outputString);
-                        }
-                        else
-                        {
-                            Console.WriteLine(outputString);
-                        }
-                    });
+            foreach (var distribution in statusDistributions)
+            {
+                var statusCode = (int)distribution.Status;
+                string outputString;
+                if (statusCode == 0)
+                {
+                    outputString = string.Format("Failed connections : {0}", distribution.ResponseCount);
+                }
+                else
+                {
+                    outputString = string.Format(
+                        "{0} [{1}] : {2} response{3}",
+                        statusCode,
+                        distribution.Status.ToString(),
+                        distribution.ResponseCount,
+                        distribution.ResponseCount > 1 ? "s" : string.Empty);
+                }
 
+                if (statusCode < 200 || statusCode > 299)
+                {
+                    ExtendedConsole.WriteErrorLine(outputString);
+                }
+                else
+                {
+                    Console.WriteLine(outputString);
+                }
+            }
             Console.WriteLine();
         }
 
@@ -215,10 +214,12 @@ namespace Wrex.Console
             Console.WriteLine(new string('-', Title.Length));
             Console.WriteLine();
 
-            var leftColumnLength = (responseTimeDistributions.Max(x => x.ResponseCount).ToString().Length
-                                    + responseTimeDistributions.Max(x => x.TimeSpan).ToString().Length) + 10;
+            var responsetimeDistributions = responseTimeDistributions.ToArray();
 
-            foreach (var responseTimeDistribution in responseTimeDistributions)
+            var leftColumnLength = (responsetimeDistributions.Max(x => x.ResponseCount).ToString().Length
+                                    + responsetimeDistributions.Max(x => x.TimeSpan).ToString().Length) + 10;
+
+            foreach (var responseTimeDistribution in responsetimeDistributions)
             {
                 var barWidth =
                     (int)
@@ -242,8 +243,8 @@ namespace Wrex.Console
         {
             if (wrexInstance.SampleResponse != null)
             {
-                // Increase buffer size if possible.
-                ExtendedConsole.SetConsoleBuffer(Console.BufferHeight + wrexInstance.SampleResponse.Length);
+                // Increase buffer height if possible.
+                ExtendedConsole.SetBufferSize(-1, Console.BufferHeight + wrexInstance.SampleResponse.Length);
                 const string Title = "Sample Response:";
                 Console.WriteLine(Title);
                 Console.WriteLine(new string('-', Title.Length));
